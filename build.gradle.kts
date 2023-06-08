@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "io.github.xtyuns"
-version = "0.1.0"
+version = "0.1.1"
 
 repositories {
     maven("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/")

@@ -2,6 +2,7 @@ package io.github.xtyuns
 
 import io.github.xtyuns.config.PluginConfig
 import io.github.xtyuns.data.PluginData
+import kotlinx.coroutines.delay
 import net.mamoe.mirai.console.plugin.jvm.JvmPluginDescription
 import net.mamoe.mirai.console.plugin.jvm.KotlinPlugin
 import net.mamoe.mirai.event.events.GroupAwareMessageEvent
@@ -12,9 +13,12 @@ import net.mamoe.mirai.message.data.MessageChain.Companion.serializeToJsonString
 import net.mamoe.mirai.message.data.buildForwardMessage
 import net.mamoe.mirai.message.data.sendTo
 import java.util.*
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 
 object PluginEntry : KotlinPlugin(JvmPluginDescription.loadFromResource()) {
     private val eventQueueMap = HashMap<Long, LinkedList<GroupAwareMessageEvent>>()
+    private val locks = HashSet<String>()
 
     override fun onEnable() {
         PluginConfig.reload()
@@ -35,20 +39,30 @@ object PluginEntry : KotlinPlugin(JvmPluginDescription.loadFromResource()) {
             return
         }
 
-        val messageEvents = PluginData.atMap.getOrDefault("${event.sender.id}_${event.group.id}", emptyArray())
-        if (messageEvents.isEmpty()) {
-            event.group.sendMessage("empty")
-        } else {
-            buildForwardMessage(event.group) {
-                messageEvents.forEach {
-                    add(
-                        it["senderId"].toString().toLong(),
-                        it["senderName"].toString(),
-                        MessageChain.deserializeFromJsonString(it["msg"].toString()),
-                        it["time"].toString().toInt()
-                    )
-                }
-            }.sendTo(event.group)
+        val key = "${event.sender.id}_${event.group.id}"
+        if (locks.contains(key)) {
+            return
+        }
+        locks.add(key)
+        try {
+            val messageEvents = PluginData.atMap.getOrDefault(key, emptyArray())
+            if (messageEvents.isEmpty()) {
+                event.group.sendMessage("empty")
+            } else {
+                buildForwardMessage(event.group) {
+                    messageEvents.forEach {
+                        add(
+                            it["senderId"].toString().toLong(),
+                            it["senderName"].toString(),
+                            MessageChain.deserializeFromJsonString(it["msg"].toString()),
+                            it["time"].toString().toInt()
+                        )
+                    }
+                }.sendTo(event.group)
+            }
+        } finally {
+            delay(PluginConfig.interval.toDuration(DurationUnit.MILLISECONDS))
+            locks.remove(key)
         }
     }
 
